@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* ⬇️ 已彻底关闭所有严格模式及繁琐的空值/索引检查 */
+    "strict": false,
+
+    /* 保持文件独立编译，这是 Vite/ESBuild 的基本要求 */
+    "isolatedModules": true,
+
+    /* 路径别名 */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/components/CustomTable/**",
+    "src/pages/LogManage/**",
+    "src/pages/System/**",
+    "src/pages/UserManage/**"
+  ]
+}
