@@ -101,7 +101,7 @@ export default function Login() {
             marginBottom: 6,
           }}
         >
-          智 阅
+          答题系统学生端
         </div>
         <div
           style={{
