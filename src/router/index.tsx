@@ -51,7 +51,7 @@ const router = createBrowserRouter([
   {
     // 兜底路由：匹配不到的路径全回首页
     path: '*',
-    element: <Navigate to="/home" replace />,
+    element: <Navigate to="/login" replace />,
   },
 ]);
 

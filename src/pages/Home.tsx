@@ -20,7 +20,7 @@ export default function Home() {
   const [filter, setFilter] = useState<FilterKey>('全部');
   const [quizzes, setQuizzes] = useState<QuizType[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [name, setName] = useState('');
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -53,11 +53,22 @@ export default function Home() {
     fetchData();
   }, []);
 
+  const fetchName = async () => {
+    try {
+      const res = await api.student.profile(getStudentId());
+      console.log('🚀 ~ Home ~ res:', res);
+      setName(res.data.real_name);
+    } catch (error) {
+      console.log(error);
+    }
+  };
   // 根据当前 Filter 过滤列表
   const filteredQuizzes = quizzes.filter(
     (q) => filter === '全部' || q.status === filter,
   );
-
+  useEffect(() => {
+    fetchName();
+  }, []);
   // 计算进行中的数量（从原始数据计算）
   const ongoingCount = quizzes.filter((q) => q.status === '进行中').length;
 
@@ -97,7 +108,7 @@ export default function Home() {
         <div style={{ fontSize: 32 }}>🌟</div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-            李明同学，加油！
+            {name}同学，加油！
           </div>
           <div style={{ fontSize: 12, opacity: 0.85 }}>
             {ongoingCount > 0

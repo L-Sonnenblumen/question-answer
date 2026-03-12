@@ -40,7 +40,6 @@ export const errorInterceptor = (error: AxiosError) => {
     case 401:
       window.localStorage.removeItem(TokenKey);
 
-      message.error('你已经被强制下线');
       setTimeout(() => {
         const { pathname } = window.location;
         if (pathname.startsWith('/manage'))

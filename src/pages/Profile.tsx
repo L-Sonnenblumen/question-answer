@@ -5,11 +5,25 @@ import { clearAuth, getStudentId } from '../utils/auth';
 import api from '../api';
 import { useEffect, useState } from 'react';
 
+// 1. 新增：定义学生数据的 TypeScript 接口
+interface Student {
+  real_name: string;
+  student_no: string;
+  class_name: string;
+  quiz_count: number;
+  avg_accuracy_rate: number;
+  answered_count: number;
+}
+
 export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [student, setProfileData] = useState();
-  const fetchData = async (student_id) => {
+
+  // 2. 修复：为 useState 传入具体的类型 <Student | null>，并设置初始值为 null
+  const [student, setProfileData] = useState<Student | null>(null);
+
+  // 3. 修复：为 student_id 添加类型标注（这里假设是 string，如果是数字请改为 number）
+  const fetchData = async (student_id: string) => {
     setLoading(true);
     try {
       const res = await api.student.profile(student_id);
@@ -24,6 +38,7 @@ export default function Profile() {
   useEffect(() => {
     fetchData(getStudentId());
   }, []);
+
   const handleLogout = async () => {
     // UI 阶段：不清理实际状态，直接跳转感受交互
     await api.student.logout(getStudentId());
@@ -86,7 +101,7 @@ export default function Profile() {
               {[
                 { val: student.quiz_count, label: '已参与测验' },
                 {
-                  val: `${Math.round(student.avg_accuracy_rate * 100)}%`,
+                  val: `${Math.round(student.avg_accuracy_rate)}%`,
                   label: '平均正确率',
                 },
                 { val: student.answered_count, label: '已答题数' },

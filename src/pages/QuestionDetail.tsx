@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from './Header';
 import ContentBlocks from './ContentBlocks';
@@ -13,125 +13,193 @@ export default function QuestionDetail() {
   const [data, setData] = useState<any>(null);
 
   const [answerMd, setAnswerMd] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [durationSec, setDurationSec] = useState(0);
-  const loadDetail = useCallback(async () => {
-    if (!quizId || !questionId) return;
-    try {
-      setLoading(true);
-      const res = await api.student.questionDetail(
-        getStudentId(),
-        quizId,
-        questionId,
-      );
-      const rawData = res?.data?.data || res?.data || res;
 
-      if (!rawData) return;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-      // 1. 状态判断
-      let uiStatus = 'blank';
-      if (rawData.is_answered) {
-        if (rawData.grading_status === '已批改') {
-          uiStatus = rawData.result_status === '正确' ? 'correct' : 'wrong';
-        } else {
-          uiStatus = 'pending';
-        }
-      }
-
-      // 2. 组装题目内容
-      const questionContent = [];
-      if (rawData.question)
-        questionContent.push({ type: 'text', value: rawData.question });
-
-      // 3. 组装我的答案（文本 + 图片）
-      const myAnswerContent = [];
-      if (rawData.my_answer)
-        myAnswerContent.push({ type: 'text', value: rawData.my_answer });
-      if (Array.isArray(rawData.image_urls)) {
-        rawData.image_urls.forEach((url: string) =>
-          myAnswerContent.push({ type: 'image', url }),
+  // 🚀 优化：增加 isSilent 参数，用于静默刷新，防止轮询成功时屏幕闪烁
+  const loadDetail = useCallback(
+    async (isSilent = false) => {
+      if (!quizId || !questionId) return;
+      try {
+        if (!isSilent) setLoading(true);
+        const res = await api.student.questionDetail(
+          getStudentId(),
+          quizId,
+          questionId,
         );
-      }
+        const rawData = res?.data?.data || res?.data || res;
 
-      // 4. 组装参考答案
-      const correctAnswerContent = [];
-      if (rawData.reference_answer)
-        correctAnswerContent.push({
-          type: 'text',
-          value: rawData.reference_answer,
+        if (!rawData) return;
+
+        let uiStatus = 'blank';
+        if (rawData.is_answered) {
+          if (rawData.grading_status === '已批改') {
+            uiStatus = rawData.result_status === '正确' ? 'correct' : 'wrong';
+          } else {
+            uiStatus = 'pending';
+          }
+        }
+
+        const questionContent = [];
+        if (rawData.question) {
+          questionContent.push({ type: 'text', value: rawData.question });
+        }
+        if (Array.isArray(rawData.question_image_urls)) {
+          rawData.question_image_urls.forEach((url: string) =>
+            questionContent.push({ type: 'image', url }),
+          );
+        }
+
+        const myAnswerContent = [];
+        if (rawData.my_answer)
+          myAnswerContent.push({ type: 'text', value: rawData.my_answer });
+        if (Array.isArray(rawData.image_urls)) {
+          rawData.image_urls.forEach((url: string) =>
+            myAnswerContent.push({ type: 'image', url }),
+          );
+        }
+
+        const correctAnswerContent = [];
+        if (rawData.reference_answer)
+          correctAnswerContent.push({
+            type: 'text',
+            value: rawData.reference_answer,
+          });
+
+        const formattedTypicalError = Array.isArray(rawData.typical_errors)
+          ? rawData.typical_errors
+              .map(
+                (err: any) =>
+                  `【${err.pattern_name}】${err.pattern_desc}\n建议：${err.suggestion_text}`,
+              )
+              .join('\n\n')
+          : '';
+
+        let timeStr = '';
+        if (rawData.submitted_at) {
+          const d = new Date(rawData.submitted_at);
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          const hh = String(d.getHours()).padStart(2, '0');
+          const min = String(d.getMinutes()).padStart(2, '0');
+          const sec = rawData.duration_sec || 0;
+          timeStr = `用时 ${Math.floor(sec / 60)}分${sec % 60}秒 · ${mm}/${dd} ${hh}:${min}`;
+        }
+
+        setData({
+          answerId: rawData.answer_id, // 🚀 记录 answer_id，供轮询接口使用
+          status: uiStatus,
+          content: questionContent,
+          myAnswer: myAnswerContent,
+          correctAnswer: correctAnswerContent,
+          feedback:
+            rawData.teacher_feedback || rawData.ai_feedback || '暂无详细评语',
+          score: rawData.final_score ?? rawData.ai_score ?? 0,
+          typicalError: formattedTypicalError,
+          timeStr,
+          index: '当前题',
+          total: '-',
         });
 
-      // 5. 格式化典型错误
-      const formattedTypicalError = Array.isArray(rawData.typical_errors)
-        ? rawData.typical_errors
-            .map(
-              (err: any) =>
-                `【${err.pattern_name}】${err.pattern_desc}\n建议：${err.suggestion_text}`,
-            )
-            .join('\n\n')
-        : '';
-
-      // 6. 格式化时间字符串（如：用时 2分0秒 · 03/11 03:48）
-      let timeStr = '';
-      if (rawData.submitted_at) {
-        const d = new Date(rawData.submitted_at);
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        const hh = String(d.getHours()).padStart(2, '0');
-        const min = String(d.getMinutes()).padStart(2, '0');
-        const sec = rawData.duration_sec || 0;
-        timeStr = `用时 ${Math.floor(sec / 60)}分${sec % 60}秒 · ${mm}/${dd} ${hh}:${min}`;
+        if (uiStatus === 'blank' && rawData.my_answer) {
+          setAnswerMd(rawData.my_answer);
+        }
+      } catch (error) {
+        console.error('获取题目详情失败:', error);
+      } finally {
+        if (!isSilent) setLoading(false);
       }
+    },
+    [quizId, questionId],
+  );
 
-      setData({
-        status: uiStatus,
-        content: questionContent,
-        myAnswer: myAnswerContent,
-        correctAnswer: correctAnswerContent,
-        feedback:
-          rawData.teacher_feedback || rawData.ai_feedback || '暂无详细评语',
-        score: rawData.final_score ?? rawData.ai_score ?? 0,
-        typicalError: formattedTypicalError,
-        timeStr,
-        index: '当前题', // 接口无返回题号，占位
-        total: '-',
-      });
-
-      // 回显草稿
-      if (uiStatus === 'blank' && rawData.my_answer) {
-        setAnswerMd(rawData.my_answer);
-      }
-    } catch (error) {
-      console.error('获取题目详情失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [quizId, questionId]);
-
+  // 页面初始化加载
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  // 作答计时器
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    // 只有当题目加载出来，且状态是“未作答”时，才启动计时
+    let timer: ReturnType<typeof setTimeout>;
     if (data && data.status === 'blank') {
       timer = setInterval(() => {
         setDurationSec((prev) => prev + 1);
       }, 1000);
     }
-    // 组件卸载或状态改变时清理定时器，防止内存泄漏
     return () => clearInterval(timer);
   }, [data?.status]);
 
-  // 辅助函数：将秒数转为 MM:SS 格式显示
+  // 🚀 新增：AI 批改轮询逻辑
+  useEffect(() => {
+    let pollTimer: ReturnType<typeof setInterval>;
+
+    // 只有在状态为 pending，且拿到了 answerId 时才开启轮询
+    if (data?.status === 'pending' && data?.answerId) {
+      const checkGrading = async () => {
+        try {
+          const res = await api.student.gradingView(
+            getStudentId(),
+            data.answerId,
+          );
+          const rawData = res?.data?.data || res?.data || res;
+
+          // 一旦查到状态变成“已批改”
+          if (rawData && rawData.grading_status === '已批改') {
+            clearInterval(pollTimer); // 停止轮询
+            loadDetail(true); // 静默刷新完整详情数据（不显示加载框，平滑更新UI展示错题建议）
+          }
+        } catch (error) {
+          console.error('轮询批改结果失败:', error);
+        }
+      };
+
+      // 每 3 秒去后台看一眼
+      pollTimer = setInterval(checkGrading, 3000);
+    }
+
+    // 组件卸载或状态变化时，清理定时器
+    return () => {
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [data?.status, data?.answerId, loadDetail]);
+
   const formatDuration = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isValidType = file.type === 'image/jpeg' || file.type === 'image/png';
+    if (!isValidType) {
+      alert('只支持 JPG/PNG 格式的图片！');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('图片大小不能超过 5MB！');
+      return;
+    }
+
+    setSelectedFiles((prev) => [...prev, file]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    setSelectedFiles((prev) =>
+      prev.filter((_, index) => index !== indexToRemove),
+    );
+  };
+
   const handleSubmit = async () => {
-    if (!answerMd.trim() && imageUrls.length === 0) {
+    if (!answerMd.trim() && selectedFiles.length === 0) {
       alert('请填写答案或上传图片后再提交');
       return;
     }
@@ -142,12 +210,16 @@ export default function QuestionDetail() {
         quizId,
         questionId,
         answerMd,
-        imageUrls,
+        selectedFiles,
         new Date().toISOString(),
         durationSec,
       );
-      await loadDetail();
+
+      setSelectedFiles([]);
+      // 提交成功后静默刷新，状态变成 pending，然后触发上面的轮询 effect
+      await loadDetail(true);
     } catch (error) {
+      console.error(error);
       alert('提交失败，请重试');
     } finally {
       setSubmitting(false);
@@ -162,12 +234,13 @@ export default function QuestionDetail() {
         : s === 'pending'
           ? '#f5a623'
           : '#1c1c2e';
+
   const statusLabel = (s: string) =>
     s === 'correct' || s === 'wrong'
       ? '已批改'
       : s === 'pending'
-        ? '待批改'
-        : '作答';
+        ? '批改中'
+        : '作答'; // 把待批改文案换成批改中体验更好
 
   if (loading)
     return (
@@ -237,7 +310,7 @@ export default function QuestionDetail() {
           <ContentBlocks blocks={data.content} />
         </div>
 
-        {/* --- 2. 未作答状态（带数学符号按钮） --- */}
+        {/* --- 2. 未作答状态 --- */}
         {data.status === 'blank' && (
           <div style={{ padding: '0 14px' }}>
             <div
@@ -248,7 +321,6 @@ export default function QuestionDetail() {
                 border: '1px solid #e2ddd6',
               }}
             >
-              {/* 🚀 修改：带有计时器的标题栏 */}
               <div
                 style={{
                   display: 'flex',
@@ -282,6 +354,7 @@ export default function QuestionDetail() {
                   ⏱ {formatDuration(durationSec)}
                 </div>
               </div>
+
               <div
                 style={{
                   display: 'flex',
@@ -311,6 +384,7 @@ export default function QuestionDetail() {
                   ),
                 )}
               </div>
+
               <textarea
                 value={answerMd}
                 onChange={(e) => setAnswerMd(e.target.value)}
@@ -323,9 +397,77 @@ export default function QuestionDetail() {
                   borderRadius: 8,
                   padding: 10,
                   outline: 'none',
+                  boxSizing: 'border-box',
                 }}
               />
+
+              {/* 本地图片预览 */}
+              {selectedFiles.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    marginTop: 10,
+                  }}
+                >
+                  {selectedFiles.map((file, index) => {
+                    const previewUrl = URL.createObjectURL(file);
+                    return (
+                      <div
+                        key={index}
+                        style={{ position: 'relative', width: 80, height: 80 }}
+                      >
+                        <img
+                          src={previewUrl}
+                          alt="preview"
+                          onLoad={() => URL.revokeObjectURL(previewUrl)}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            borderRadius: 8,
+                            border: '1px solid #e2ddd6',
+                          }}
+                        />
+                        <button
+                          onClick={() => handleRemoveImage(index)}
+                          style={{
+                            position: 'absolute',
+                            top: -6,
+                            right: -6,
+                            background: '#e34c4c',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: 20,
+                            height: 20,
+                            fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            zIndex: 2,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <input
+                type="file"
+                accept="image/jpeg, image/png"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImageSelect}
+              />
+
               <div
+                onClick={() => fileInputRef.current?.click()}
                 style={{
                   marginTop: 10,
                   border: '1.5px dashed #e2ddd6',
@@ -382,6 +524,8 @@ export default function QuestionDetail() {
                 <ContentBlocks blocks={data.myAnswer} />
               </div>
               <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
+                {/* 增加了一个小动画图标提示正在轮询 */}
+                <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
                 <div
                   style={{
                     fontSize: 15,
@@ -393,14 +537,14 @@ export default function QuestionDetail() {
                   AI 批改中…
                 </div>
                 <div style={{ fontSize: 13, color: '#8a8aa0' }}>
-                  通常在30秒内完成，完成后自动更新
+                  通常在 10~30 秒内完成，完成后自动展示结果
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* --- 4. 已批改状态 (还原了你的各种高亮和框框) --- */}
+        {/* --- 4. 已批改状态 --- */}
         {(data.status === 'correct' || data.status === 'wrong') && (
           <div style={{ padding: '0 14px' }}>
             <div
@@ -483,7 +627,6 @@ export default function QuestionDetail() {
                 <ContentBlocks blocks={data.myAnswer} />
               </div>
 
-              {/* AI 批改反馈框 */}
               <div
                 style={{
                   marginTop: 12,
@@ -519,7 +662,6 @@ export default function QuestionDetail() {
                 </div>
               </div>
 
-              {/* 回答错误时显示的：正确答案 & 典型错误 */}
               {data.status === 'wrong' && (
                 <div style={{ marginTop: 12 }}>
                   <div

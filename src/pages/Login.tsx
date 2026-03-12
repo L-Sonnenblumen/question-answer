@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isLogin, setAuth } from '../utils/auth'; // 💡 引入刚刚写的存储工具
+import { setAuth } from '../utils/auth'; // 💡 引入刚刚写的存储工具
 import api from '../api';
 import { message } from 'antd';
 
@@ -35,13 +35,6 @@ export default function Login() {
       setLoading(false);
     }
   };
-  // 💡 新增的拦截逻辑：组件挂载时检查，如果已经登录，瞬间跳走
-  useEffect(() => {
-    if (isLogin()) {
-      // replace: true 保证这次强制跳转不会在历史记录里留下痕迹
-      navigate('/home', { replace: true });
-    }
-  }, [navigate]);
   return (
     <div className="app-container" style={{ background: '#1c1c2e' }}>
       {/* 装饰性发光背景球 */}
@@ -150,7 +143,7 @@ export default function Login() {
           <input
             className="m-input"
             type="text"
-            placeholder="请输入学号 (测试: 随便填)"
+            placeholder="请输入学号"
             value={no}
             onChange={(e) => setNo(e.target.value)}
           />
