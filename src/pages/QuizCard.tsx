@@ -178,7 +178,7 @@ export default function QuizCard({ quiz, onClick }: QuizCardProps) {
       >
         <span>
           {quiz.status === '已完成'
-            ? `得分 ${quiz.score} 分`
+            ? `得分 ${quiz.score} 分 / 总分 ${Number(quiz.totalQuestions) * 100} 分`
             : `${quiz.answeredCount}/${quiz.totalQuestions} 已答对`}
         </span>
         <span>
