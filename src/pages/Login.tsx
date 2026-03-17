@@ -94,7 +94,7 @@ export default function Login() {
             marginBottom: 6,
           }}
         >
-          答题系统学生端
+          智阅·慧评系统
         </div>
         <div
           style={{
